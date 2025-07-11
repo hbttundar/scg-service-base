@@ -11,6 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
 // MockTracer is a mock implementation of the tracing.Tracer interface
 type MockTracer struct {
 	mock.Mock
@@ -43,13 +46,16 @@ func TestTracingMiddleware(t *testing.T) {
 		// Create a mock tracer
 		mockTracer := new(MockTracer)
 
+		// Define a context key
+		testKey := contextKey("test")
+
 		// Set up expectations
-		mockCtx := context.WithValue(context.Background(), "test", "value")
+		mockCtx := context.WithValue(context.Background(), testKey, "value")
 		mockTracer.On("Start", mock.Anything, "/test").Return(mockCtx, func() {})
 		mockTracer.On("SetAttributes", mockCtx, mock.MatchedBy(func(attrs map[string]string) bool {
-			return attrs["http.method"] == "GET" && 
-				   attrs["http.url"] == "/test" && 
-				   attrs["http.host"] == "example.com"
+			return attrs["http.method"] == "GET" &&
+				attrs["http.url"] == "/test" &&
+				attrs["http.host"] == "example.com"
 		})).Return()
 
 		// Create the middleware
@@ -58,7 +64,7 @@ func TestTracingMiddleware(t *testing.T) {
 		// Create a test handler
 		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Verify that the context was updated
-			assert.Equal(t, "value", r.Context().Value("test"))
+			assert.Equal(t, "value", r.Context().Value(testKey))
 			w.WriteHeader(http.StatusOK)
 		})
 

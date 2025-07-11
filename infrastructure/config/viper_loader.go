@@ -9,6 +9,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Load is a convenience function that creates a ViperLoader and calls its Load method.
+// It reads configuration from a YAML file and environment variables into the provided struct pointer.
+func Load(path, fileName string, configStruct interface{}) error {
+	loader := NewViperLoader()
+	return loader.Load(path, fileName, configStruct)
+}
+
 // ViperLoader implements the config.Loader interface using Viper.
 type ViperLoader struct{}
 
@@ -26,6 +33,8 @@ func (v *ViperLoader) Load(path, fileName string, configStruct interface{}) erro
 // LoadWithOptions loads configuration with additional options.
 func (v *ViperLoader) LoadWithOptions(path, fileName string, configStruct interface{}, options appconfig.Options) error {
 	vp := viper.New()
+
+	// Set config path and name
 	vp.AddConfigPath(path)
 
 	// Remove file extension if present
@@ -36,25 +45,60 @@ func (v *ViperLoader) LoadWithOptions(path, fileName string, configStruct interf
 
 	// Configure environment variables
 	if options.AllowEnvOverride {
-		vp.AutomaticEnv()
 		if options.EnvPrefix != "" {
 			vp.SetEnvPrefix(options.EnvPrefix)
 		}
 		vp.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+		// Explicitly bind common configuration keys to environment variables
+		// Helper function to bind environment variables and handle errors
+		bindEnv := func(key string) {
+			// Explicitly ignore the error as it's not critical
+			_ = vp.BindEnv(key)
+		}
+
+		bindEnv("app_name")
+		bindEnv("server.port")
+		bindEnv("database.host")
+		bindEnv("database.port")
+		bindEnv("database.username")
+		bindEnv("database.password")
+
+		vp.AutomaticEnv() // This enables overriding config with env vars
 	}
 
 	// Read configuration file
-	if err := vp.ReadInConfig(); err != nil {
+	err := vp.ReadInConfig()
+	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			if options.RequireConfigFile {
 				return err
 			}
+			// Config file not found but not required, continue with defaults
 		} else {
+			// Config file found but could not be read
 			return err
 		}
 	}
 
-	return vp.Unmarshal(configStruct)
+	// Explicitly set all keys from the config file to ensure they're available
+	for _, key := range vp.AllKeys() {
+		val := vp.Get(key)
+		vp.Set(key, val)
+	}
+
+	// Explicitly set the app_name field if it exists in the config file
+	if vp.IsSet("app_name") {
+		appName := vp.GetString("app_name")
+		vp.Set("AppName", appName) // Also set with capitalized field name
+	}
+
+	// Unmarshal the config into the provided struct
+	if err := vp.Unmarshal(configStruct); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Reload reloads configuration from the source.

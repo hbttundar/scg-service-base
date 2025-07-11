@@ -13,8 +13,8 @@ import (
 	"reflect"
 	"strings"
 
-	appvalidation "github.com/hbttundar/scg-service-base/application/validation"
 	applogger "github.com/hbttundar/scg-service-base/application/logger"
+	appvalidation "github.com/hbttundar/scg-service-base/application/validation"
 )
 
 // Type aliases for validator types
@@ -121,7 +121,12 @@ func NewPlaygroundAdapter(config appvalidation.Config, log applogger.Logger) app
 			// For now, we'll just pass the value directly
 			return rule(context.Background(), fl)
 		}
-		validator.RegisterValidation(name, validatorRule)
+		if err := validator.RegisterValidation(name, validatorRule); err != nil {
+			log.WarnKV(context.Background(), "failed to register validation rule", map[string]interface{}{
+				"rule":  name,
+				"error": err.Error(),
+			})
+		}
 	}
 
 	return &playgroundAdapter{

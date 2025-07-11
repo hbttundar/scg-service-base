@@ -1,6 +1,7 @@
 package tracing_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestNewTracer(t *testing.T) {
 
 	// Shutdown the tracer to clean up resources
 	if tracer != nil {
-		err = tracer.Shutdown(nil)
+		err = tracer.Shutdown(context.TODO())
 		assert.NoError(t, err)
 	}
 }

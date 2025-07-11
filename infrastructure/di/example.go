@@ -56,40 +56,53 @@ func Example() {
 	}
 }
 
+// handleProvideError is a helper function to handle errors from container.Provide
+func handleProvideError(err error, componentName string) {
+	if err != nil {
+		fmt.Printf("Error registering %s: %v\n", componentName, err)
+	}
+}
+
 // registerInfrastructure registers constructors for infrastructure components.
 func registerInfrastructure(container *Container) {
 	// Register config loader
-	container.Provide(func() appconfig.Loader {
+	err := container.Provide(func() appconfig.Loader {
 		return config.NewViperLoader()
 	})
+	handleProvideError(err, "config loader")
 
 	// Register logger
-	container.Provide(func() applogger.Logger {
+	err = container.Provide(func() applogger.Logger {
 		return logger.NewZerologAdapter(nil, "info")
 	})
+	handleProvideError(err, "logger")
 
 	// Register gRPC client
-	container.Provide(func(logger applogger.Logger) appgrpc.Client {
+	err = container.Provide(func(logger applogger.Logger) appgrpc.Client {
 		return grpc.NewClientAdapter(appgrpc.DefaultClientConfig(), logger)
 	})
+	handleProvideError(err, "gRPC client")
 
 	// Register gRPC server
-	container.Provide(func(logger applogger.Logger) appgrpc.Server {
+	err = container.Provide(func(logger applogger.Logger) appgrpc.Server {
 		return grpc.NewServerAdapter(appgrpc.DefaultServerConfig(), logger)
 	})
+	handleProvideError(err, "gRPC server")
 
 	// Register mock item repository
-	container.Provide(func() repository.ItemRepository {
+	err = container.Provide(func() repository.ItemRepository {
 		return newMockItemRepository()
 	})
+	handleProvideError(err, "mock item repository")
 }
 
 // registerDomain registers constructors for domain components.
 func registerDomain(container *Container) {
 	// Register item service
-	container.Provide(func(repo repository.ItemRepository) *service.ItemService {
+	err := container.Provide(func(repo repository.ItemRepository) *service.ItemService {
 		return service.NewItemService(repo)
 	})
+	handleProvideError(err, "item service")
 }
 
 // registerApplication registers constructors for application components.

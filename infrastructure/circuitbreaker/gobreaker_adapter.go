@@ -17,23 +17,44 @@ import (
 	applogger "github.com/hbttundar/scg-service-base/application/logger"
 )
 
+// max returns the larger of x or y.
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+// safeUint32 safely converts an int to uint32, clamping negative values to 0
+// and large values to math.MaxUint32 to prevent overflow.
+func safeUint32(n int) uint32 {
+	if n < 0 {
+		return 0
+	}
+	// MaxUint32 is 2^32 - 1 = 4294967295
+	if n > 4294967295 {
+		return 4294967295
+	}
+	return uint32(n)
+}
+
 // Type aliases for circuit breaker types
 // These are placeholders for the actual types from the gobreaker package
 // They will be replaced with the actual types when the dependencies are added
 type (
 	// circuitBreaker represents a circuit breaker
 	circuitBreaker struct {
-		name                   string
-		maxRequests            uint32
-		interval               time.Duration
-		timeout                time.Duration
-		readyToTrip            func(counts interface{}) bool
-		onStateChange          func(name string, from, to string)
-		counts                 interface{}
-		state                  string
-		generation             uint64
-		lastStateChangeTime    time.Time
-		mutex                  sync.Mutex
+		name                string
+		maxRequests         uint32
+		interval            time.Duration
+		timeout             time.Duration
+		readyToTrip         func(counts interface{}) bool
+		onStateChange       func(name string, from, to string)
+		counts              interface{}
+		state               string
+		generation          uint64
+		lastStateChangeTime time.Time
+		mutex               sync.Mutex
 	}
 
 	// counts represents statistics for the circuit breaker
@@ -144,10 +165,10 @@ func (cb *circuitBreaker) State() string {
 
 // gobreakerAdapter implements the circuitbreaker.CircuitBreaker interface using the gobreaker package.
 type gobreakerAdapter struct {
-	config    appcircuitbreaker.Config
-	breakers  map[string]*circuitBreaker
-	mu        sync.RWMutex
-	log       applogger.Logger
+	config   appcircuitbreaker.Config
+	breakers map[string]*circuitBreaker
+	mu       sync.RWMutex
+	log      applogger.Logger
 }
 
 // NewGoBreakerAdapter creates a new circuit breaker adapter using the gobreaker package.
@@ -181,12 +202,12 @@ func (g *gobreakerAdapter) getBreaker(name string) *circuitBreaker {
 	// Create a new circuit breaker
 	st := settings{
 		name:        name,
-		maxRequests: uint32(g.config.MaxConcurrentRequests),
+		maxRequests: safeUint32(g.config.MaxConcurrentRequests),
 		interval:    g.config.HealthCheckInterval,
 		timeout:     g.config.SleepWindow,
 		readyToTrip: func(c interface{}) bool {
 			counts := c.(*counts)
-			return counts.requests >= uint32(g.config.RequestVolumeThreshold) &&
+			return counts.requests >= safeUint32(g.config.RequestVolumeThreshold) &&
 				float64(counts.totalFailures)/float64(counts.requests)*100 >= float64(g.config.ErrorThresholdPercentage)
 		},
 		onStateChange: func(name string, from, to string) {

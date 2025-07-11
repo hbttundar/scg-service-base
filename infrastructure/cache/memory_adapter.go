@@ -117,33 +117,29 @@ func (m *memoryAdapter) GetWithType(ctx context.Context, key string, value inter
 		return false
 	}
 
-	// Try to convert directly
-	if v, ok := data.(interface{}); ok {
-		// Try to assign directly
-		switch v := v.(type) {
-		case []byte:
-			// If it's a byte slice, try to unmarshal it
-			if err := json.Unmarshal(v, value); err != nil {
-				m.log.Error(ctx, err, "failed to unmarshal cache value")
-				return false
-			}
-			return true
-		default:
-			// Try to marshal and unmarshal to convert between types
-			bytes, err := json.Marshal(v)
-			if err != nil {
-				m.log.Error(ctx, err, "failed to marshal cache value")
-				return false
-			}
-			if err := json.Unmarshal(bytes, value); err != nil {
-				m.log.Error(ctx, err, "failed to unmarshal cache value")
-				return false
-			}
-			return true
+	// Try to assign directly
+	switch v := data.(type) {
+	case []byte:
+		// If it's a byte slice, try to unmarshal it
+		if err := json.Unmarshal(v, value); err != nil {
+			m.log.Error(ctx, err, "failed to unmarshal cache value")
+			return false
 		}
+		return true
+	default:
+		// Try to marshal and unmarshal to convert between types
+		bytes, err := json.Marshal(v)
+		if err != nil {
+			m.log.Error(ctx, err, "failed to marshal cache value")
+			return false
+		}
+		if err := json.Unmarshal(bytes, value); err != nil {
+			m.log.Error(ctx, err, "failed to unmarshal cache value")
+			return false
+		}
+		return true
 	}
 
-	return false
 }
 
 // Set stores a value in the cache with the given key and TTL.

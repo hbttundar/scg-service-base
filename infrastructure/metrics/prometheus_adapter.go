@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	appmetrics "github.com/hbttundar/scg-service-base/application/metrics"
 	applogger "github.com/hbttundar/scg-service-base/application/logger"
+	appmetrics "github.com/hbttundar/scg-service-base/application/metrics"
 )
 
 // prometheusAdapter implements the metrics.Metrics interface using Prometheus.
@@ -82,10 +82,20 @@ func (p *prometheusAdapter) Serve(ctx context.Context, addr string) error {
 			// In a real implementation, this would use the Prometheus handler
 			// to expose metrics in the Prometheus format.
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("# HELP example_metric Example metric\n"))
-			w.Write([]byte("# TYPE example_metric gauge\n"))
-			w.Write([]byte("example_metric 42\n"))
+			if _, err := w.Write([]byte("# HELP example_metric Example metric\n")); err != nil {
+				p.log.Error(r.Context(), err, "failed to write metrics response")
+				return
+			}
+			if _, err := w.Write([]byte("# TYPE example_metric gauge\n")); err != nil {
+				p.log.Error(r.Context(), err, "failed to write metrics response")
+				return
+			}
+			if _, err := w.Write([]byte("example_metric 42\n")); err != nil {
+				p.log.Error(r.Context(), err, "failed to write metrics response")
+				return
+			}
 		}),
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 	}
 
 	// Start the server in a goroutine

@@ -9,8 +9,17 @@ import (
 	"reflect"
 	"strings"
 
-	appvalidation "github.com/hbttundar/scg-service-base/application/validation"
 	applogger "github.com/hbttundar/scg-service-base/application/logger"
+	appvalidation "github.com/hbttundar/scg-service-base/application/validation"
+)
+
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+// Context keys
+const (
+	validationModelKey contextKey = "validated_model"
+	validationKey      contextKey = "validation_model"
 )
 
 // ValidationMiddleware provides middleware to validate request data.
@@ -18,6 +27,18 @@ type ValidationMiddleware struct {
 	validator appvalidation.Validator
 	config    appvalidation.Config
 	log       applogger.Logger
+}
+
+// writeValidationErrorResponse writes validation error response to the response writer
+func (vm *ValidationMiddleware) writeValidationErrorResponse(w http.ResponseWriter, r *http.Request, result appvalidation.ValidationResult) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":  "Validation failed",
+		"errors": result.Errors,
+	}); err != nil {
+		vm.log.Error(r.Context(), err, "failed to encode validation errors response")
+	}
 }
 
 // NewValidationMiddleware creates a new validation middleware.
@@ -45,7 +66,7 @@ func (vm *ValidationMiddleware) Middleware() func(http.Handler) http.Handler {
 			}
 
 			// Get the validation model from the request context
-			model := r.Context().Value("validation_model")
+			model := r.Context().Value(validationKey)
 			if model == nil {
 				// No validation model, skip validation
 				next.ServeHTTP(w, r)
@@ -81,17 +102,12 @@ func (vm *ValidationMiddleware) Middleware() func(http.Handler) http.Handler {
 			result := vm.validator.Validate(r.Context(), modelValue)
 			if !result.Valid {
 				// Return validation errors
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":  "Validation failed",
-					"errors": result.Errors,
-				})
+				vm.writeValidationErrorResponse(w, r, result)
 				return
 			}
 
 			// Store the validated model in the request context
-			ctx := context.WithValue(r.Context(), "validated_model", modelValue)
+			ctx := context.WithValue(r.Context(), validationModelKey, modelValue)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -141,17 +157,12 @@ func (vm *ValidationMiddleware) Validate(model interface{}) func(http.Handler) h
 			result := vm.validator.Validate(r.Context(), modelValue)
 			if !result.Valid {
 				// Return validation errors
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":  "Validation failed",
-					"errors": result.Errors,
-				})
+				vm.writeValidationErrorResponse(w, r, result)
 				return
 			}
 
 			// Store the validated model in the request context
-			ctx := context.WithValue(r.Context(), "validated_model", modelValue)
+			ctx := context.WithValue(r.Context(), validationModelKey, modelValue)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
